@@ -11,12 +11,7 @@
 #import "ACOAdaptiveCard.h"
 #import "ACOHostConfig.h"
 
-@interface ACRViewController :UIViewController
+@interface ACRViewController:UIViewController
 
-@property (weak) id<ACRActionDelegate> acrActionDelegate;
-
-- (instancetype)init:(ACOAdaptiveCard *)card 
-          hostconfig:(ACOHostConfig *)config
-               frame:(CGRect)frame;
-
+- (instancetype)init:(ACOAdaptiveCard *)card hostconfig:(ACOHostConfig *)config frame:(CGRect)frame delegate:(id<ACRActionDelegate>) acrActionDelegate;
 @end

@@ -1,10 +1,13 @@
+#include "pch.h"
 #include "ChoiceSetInput.h"
 #include "Column.h"
+#include "Util.h"
 
 using namespace AdaptiveCards;
 
 Column::Column() : BaseCardElement(CardElementType::Column), m_width("Auto")
 {
+    PopulateKnownPropertiesSet();
 }
 
 Column::Column(
@@ -15,6 +18,7 @@ Column::Column(
     std::vector<std::shared_ptr<BaseCardElement>>& items) :
     BaseCardElement(CardElementType::Column, spacing, separation), m_width(size), m_style(style), m_items(items)
 {
+    PopulateKnownPropertiesSet();
 }
 
 Column::Column(
@@ -109,7 +113,7 @@ std::shared_ptr<Column> Column::Deserialize(
         ParseUtil::GetEnumValue<ContainerStyle>(value, AdaptiveCardSchemaKey::Style, ContainerStyle::None, ContainerStyleFromString));
 
     // Parse Items
-    auto cardElements = ParseUtil::GetElementCollection(elementParserRegistration, actionParserRegistration, value, AdaptiveCardSchemaKey::Items, true);
+    auto cardElements = ParseUtil::GetElementCollection(elementParserRegistration, actionParserRegistration, value, AdaptiveCardSchemaKey::Items, false);
     column->m_items = std::move(cardElements);
 
     column->SetSelectAction(BaseCardElement::DeserializeSelectAction(elementParserRegistration, actionParserRegistration, value, AdaptiveCardSchemaKey::SelectAction));
@@ -133,4 +137,17 @@ std::shared_ptr<BaseActionElement> Column::GetSelectAction() const
 void Column::SetSelectAction(const std::shared_ptr<BaseActionElement> action)
 {
     m_selectAction = action;
+}
+
+void Column::PopulateKnownPropertiesSet() 
+{
+    m_knownProperties.insert(AdaptiveCardSchemaKeyToString(AdaptiveCardSchemaKey::Items));
+    m_knownProperties.insert(AdaptiveCardSchemaKeyToString(AdaptiveCardSchemaKey::SelectAction));
+    m_knownProperties.insert(AdaptiveCardSchemaKeyToString(AdaptiveCardSchemaKey::Width));
+    m_knownProperties.insert(AdaptiveCardSchemaKeyToString(AdaptiveCardSchemaKey::Style));
+}
+
+void Column::SetLanguage(const std::string& language)
+{
+    PropagateLanguage(language, m_items);
 }

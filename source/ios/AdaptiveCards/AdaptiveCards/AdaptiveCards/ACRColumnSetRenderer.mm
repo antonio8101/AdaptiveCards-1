@@ -12,6 +12,9 @@
 #import "ACRLongPressGestureRecognizerFactory.h"
 #import "SharedAdaptiveCard.h"
 #import "ACRSeparator.h"
+#import "ACOHostConfigPrivate.h"
+#import "ACOBaseCardElementPrivate.h"
+#import "ACRView.h"
 
 @implementation ACRColumnSetRenderer
 
@@ -21,39 +24,44 @@
     return singletonInstance;
 }
 
-+ (CardElementType)elemType
++ (ACRCardElementType)elemType
 {
-    return CardElementType::ColumnSet;
+    return ACRColumnSet;
 }
 
 - (UIView* )render:(UIView<ACRIContentHoldingView> *)viewGroup
-            rootViewController:(UIViewController *)vc
+          rootView:(ACRView *)rootView
             inputs:(NSMutableArray *)inputs
-      withCardElem:(std::shared_ptr<BaseCardElement> const &)elem
-     andHostConfig:(std::shared_ptr<HostConfig> const &)config
+   baseCardElement:(ACOBaseCardElement *)acoElem
+        hostConfig:(ACOHostConfig *)acoConfig;
 {
+    std::shared_ptr<HostConfig> config = [acoConfig getHostConfig];
+    std::shared_ptr<BaseCardElement> elem = [acoElem element];
     std::shared_ptr<ColumnSet> columnSetElem = std::dynamic_pointer_cast<ColumnSet>(elem);
 
     ACRColumnSetView *columnSetView = [[ACRColumnSetView alloc] init];
+    [columnSetView setStyle:[viewGroup style]];
 
     ACRBaseCardElementRenderer *columRenderer =
         [[ACRRegistration getInstance] getRenderer:[NSNumber numberWithInt:(int)CardElementType::Column]] ;
     std::vector<std::shared_ptr<Column>> columns = columnSetElem->GetColumns();
 
     UIView *prevView = nil, *curView = nil;
-    long relativeColumnWidth = 0, prevRelColumnWidth = 0;
+    float relativeColumnWidth = 0, prevRelColumnWidth = 0;
     float multiplier = 1.0;
     NSMutableArray *constraints = [[NSMutableArray alloc] init];
+
+    ACOBaseCardElement *acoColumn = [[ACOBaseCardElement alloc] init];
     for(std::shared_ptr<Column> column:columns)
     {
         [ACRSeparator renderSeparation:column forSuperview:columnSetView withHostConfig:config];
-
-        curView = (UIStackView *)[columRenderer render:columnSetView rootViewController: vc inputs:inputs withCardElem:column andHostConfig:config];
+        [acoColumn setElem:column];
+        curView = (UIStackView *)[columRenderer render:columnSetView rootView:rootView inputs:inputs baseCardElement:acoColumn hostConfig:acoConfig];
         try
         {
-            relativeColumnWidth = std::stoul(column->GetWidth());
+            relativeColumnWidth = std::stof(column->GetWidth());
             if(prevRelColumnWidth)
-                multiplier = ((float)relativeColumnWidth) / prevRelColumnWidth;
+                multiplier = relativeColumnWidth / prevRelColumnWidth;
         }
         catch(...){ ;}
 
@@ -96,11 +104,11 @@
     // instantiate and add long press gesture recognizer
     UILongPressGestureRecognizer * gestureRecognizer =
         [ACRLongPressGestureRecognizerFactory getLongPressGestureRecognizer:viewGroup
-                                                         rootViewController:vc
+                                                                   rootView:rootView
                                                                  targetView:columnSetView
                                                               actionElement:selectAction
                                                                      inputs:inputs
-                                                                 hostConfig:config];
+                                                                 hostConfig:acoConfig];
     if(gestureRecognizer)
     {
         [columnSetView addGestureRecognizer:gestureRecognizer];

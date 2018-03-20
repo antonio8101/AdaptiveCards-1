@@ -24,7 +24,7 @@ using namespace AdaptiveCards;
 
 - (instancetype)initWithFrame:(CGRect)frame
 {
-    self = [super initWithFrame:CGRectMake(0,0,0,0)];
+    self = [super initWithFrame:frame];
     if(self)
     {
         width  = frame.size.width;
@@ -141,17 +141,16 @@ using namespace AdaptiveCards;
         {
             superview = ((ACRContentStackView *) view).stackView;
         }
-
-        separator = [[ACRSeparator alloc] init];
-        unsigned int spacing = [separator getSpacing:requestedSpacing hostConfig:config];
+        unsigned int spacing = [ACRSeparator getSpacing:requestedSpacing hostConfig:config];
+        separator = [[ACRSeparator alloc] initWithFrame:CGRectMake(0, 0, spacing, spacing)];
         if(separator)
         {
             // Shared model has not implemented support
-            separator->width  = spacing;
+            separator->width = spacing;
             separator->height = spacing;
             if(elem && elem->GetSeparator())
             {
-                separator->rgb		 = 0xB2000000;
+                separator->rgb = std::stoul(config->separator.lineColor.substr(1), nullptr, 16);
                 separator->lineWidth = 1;
             }
 
@@ -169,8 +168,7 @@ using namespace AdaptiveCards;
     }
 }
 
-- (unsigned int)getSpacing:(Spacing)spacing
-                           hostConfig:(std::shared_ptr<HostConfig> const &)config
++ (unsigned int)getSpacing:(Spacing)spacing hostConfig:(std::shared_ptr<HostConfig> const &)config
 {
     switch (spacing)
     {
@@ -210,9 +208,9 @@ using namespace AdaptiveCards;
     UIBezierPath *path = [UIBezierPath bezierPath];
     if(path)
     {
-        [path moveToPoint:   orig];
+        [path moveToPoint:orig];
         [path addLineToPoint:dest];
-        path.lineWidth =      self->lineWidth;
+        path.lineWidth = self->lineWidth;
 
         [[UIColor colorWithRed:((self->rgb & 0x00FF0000)>> 16)/ 255.0
                          green:((self->rgb & 0x0000FF00)>> 8)/ 255.0

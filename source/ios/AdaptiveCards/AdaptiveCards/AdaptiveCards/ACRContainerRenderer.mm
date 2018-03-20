@@ -11,6 +11,8 @@
 #import "Container.h"
 #import "SharedAdaptiveCard.h"
 #import "ACRLongPressGestureRecognizerFactory.h"
+#import "ACOHostConfigPrivate.h"
+#import "ACOBaseCardElementPrivate.h"
 
 @implementation ACRContainerRenderer
 
@@ -20,44 +22,39 @@
     return singletonInstance;
 }
 
-+ (CardElementType)elemType
++ (ACRCardElementType)elemType
 {
-    return CardElementType::Container;
+    return ACRContainer;
 }
 
 - (UIView *)render:(UIView<ACRIContentHoldingView> *)viewGroup
-rootViewController:(UIViewController *)vc
+          rootView:(ACRView *)rootView
             inputs:(NSMutableArray *)inputs
-      withCardElem:(std::shared_ptr<BaseCardElement> const &)elem
-     andHostConfig:(std::shared_ptr<HostConfig> const &)config
+   baseCardElement:(ACOBaseCardElement *)acoElem
+        hostConfig:(ACOHostConfig *)acoConfig;
 {
+    std::shared_ptr<BaseCardElement> elem = [acoElem element];
     std::shared_ptr<Container> containerElem = std::dynamic_pointer_cast<Container>(elem);
 
-    ContainerStyle style = containerElem->GetStyle();
-
-    if(style == ContainerStyle::None)
-    {
-        style = [viewGroup getStyle];
-    }
-
-    ACRColumnView *container = [[ACRColumnView alloc] initWithStyle:style hostConfig:config];
-
+    ACRColumnView *container = [[ACRColumnView alloc] initWithStyle:(ACRContainerStyle)containerElem->GetStyle()
+                                                        parentStyle:[viewGroup style] hostConfig:acoConfig];
     [ACRRenderer render:container
-     rootViewController:vc
+               rootView:rootView
                  inputs:inputs
           withCardElems:containerElem->GetItems()
-          andHostConfig:config];
+          andHostConfig:acoConfig];
+
     [viewGroup addArrangedSubview:container];
 
     std::shared_ptr<BaseActionElement> selectAction = containerElem->GetSelectAction();
     // instantiate and add tap gesture recognizer
     UILongPressGestureRecognizer * gestureRecognizer =
         [ACRLongPressGestureRecognizerFactory getLongPressGestureRecognizer:viewGroup
-                                                         rootViewController:vc
+                                                                   rootView:rootView
                                                                  targetView:container
                                                               actionElement:selectAction
                                                                      inputs:inputs
-                                                                 hostConfig:config];
+                                                                 hostConfig:acoConfig];
     if(gestureRecognizer)
     {
         [container addGestureRecognizer:gestureRecognizer];

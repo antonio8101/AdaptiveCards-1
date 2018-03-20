@@ -21,7 +21,7 @@
 #include "AdaptiveToggleInputRenderer.h"
 #include "AsyncOperations.h"
 #include "DefaultResourceDictionary.h"
-#include "InputItem.h"
+#include "InputValue.h"
 #include "RenderedAdaptiveCard.h"
 #include "XamlHelpers.h"
 #include <windows.foundation.collections.h>
@@ -111,7 +111,7 @@ namespace AdaptiveCards { namespace Rendering { namespace Uwp
 
         if (adaptiveCard)
         {
-            ComPtr<IUIElement> xamlTreeRoot;
+            ComPtr<IFrameworkElement> xamlTreeRoot;
 
             if (m_explicitDimensions)
             {
@@ -166,7 +166,7 @@ namespace AdaptiveCards { namespace Rendering { namespace Uwp
         RETURN_IF_FAILED(MakeAndInitialize<::AdaptiveCards::Rendering::Uwp::RenderedAdaptiveCard>(&renderedCard));
 
         ComPtr<IAdaptiveCardParseResult> adaptiveCardParseResult;
-        HRESULT hr = CreateAdaptiveCardFromJsonString(adaptiveJson, &adaptiveCardParseResult);
+        RETURN_IF_FAILED(CreateAdaptiveCardFromJsonString(adaptiveJson, &adaptiveCardParseResult));
         ComPtr<IAdaptiveCard> parsedCard;
         RETURN_IF_FAILED(adaptiveCardParseResult->get_AdaptiveCard(&parsedCard));
         if (parsedCard == nullptr)
@@ -196,9 +196,9 @@ namespace AdaptiveCards { namespace Rendering { namespace Uwp
             IJsonObject* adaptiveJson,
             IRenderedAdaptiveCard** result)
     {
-        HSTRING adaptiveJsonAsHstring;
-        RETURN_IF_FAILED(JsonObjectToHString(adaptiveJson, &adaptiveJsonAsHstring));
-        return RenderAdaptiveCardFromJsonString(adaptiveJsonAsHstring, result);
+        HString adaptiveJsonAsHstring;
+        RETURN_IF_FAILED(JsonObjectToHString(adaptiveJson, adaptiveJsonAsHstring.GetAddressOf()));
+        return RenderAdaptiveCardFromJsonString(adaptiveJsonAsHstring.Get(), result);
     }
 
     _Use_decl_annotations_

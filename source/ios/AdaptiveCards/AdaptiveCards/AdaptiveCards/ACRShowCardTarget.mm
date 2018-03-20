@@ -6,26 +6,26 @@
 //
 
 #import <UIKit/UIKit.h>
-#import <SafariServices/SafariServices.h>
 #import "ACRShowCardTarget.h"
 #import "ACRRendererPrivate.h"
+#import "ACOHostConfigPrivate.h"
 #import "ACRContentHoldingUIView.h"
 #import "ACRIBaseInputHandler.h"
-#import "ACRViewController.h"
+#import "ACRView.h"
 
 @implementation ACRShowCardTarget
 {
     std::shared_ptr<AdaptiveCards::AdaptiveCard> _adaptiveCard;
-    std::shared_ptr<AdaptiveCards::HostConfig> _config;
+    ACOHostConfig *_config;
     __weak UIView<ACRIContentHoldingView> *_superview;
-    __weak UIViewController *_vc;
+    __weak ACRView *_rootView;
     __weak UIView *_adcView;
 }
 
 - (instancetype)initWithAdaptiveCard:(std::shared_ptr<AdaptiveCards::AdaptiveCard> const &)adaptiveCard
-                              config:(std::shared_ptr<AdaptiveCards::HostConfig> const&)config
+                              config:(ACOHostConfig *)config
                            superview:(UIView<ACRIContentHoldingView> *)superview
-                                  vc:(UIViewController *)vc
+                            rootView:(ACRView *)rootView
 {
     self = [super init];
     if(self)
@@ -33,7 +33,7 @@
         _adaptiveCard = adaptiveCard;
         _config = config;
         _superview = superview;
-        _vc = vc;
+        _rootView = rootView;
         _adcView = nil;
     }
     return self;
@@ -44,27 +44,30 @@
     NSMutableArray *inputs = [[NSMutableArray alloc] init];
     UIView *adcView = [ACRRenderer renderWithAdaptiveCards:_adaptiveCard
                                                     inputs:inputs
-                                            viewController:_vc
+                                                  rootView:_rootView
                                                 guideFrame:_superview.frame
                                                 hostconfig:_config];
+
+    [[_rootView card] appendInputs:inputs];
+
     unsigned int padding = 0;
 
-    switch (_config->actions.spacing)
+    switch ([_config getHostConfig] ->actions.spacing)
     {
         case Spacing::ExtraLarge:
-            padding = _config->spacing.extraLargeSpacing;
+            padding = [_config getHostConfig]->spacing.extraLargeSpacing;
             break;
         case Spacing::Large:
-            padding = _config->spacing.largeSpacing;
+            padding = [_config getHostConfig]->spacing.largeSpacing;
             break;
         case Spacing::Medium:
-            padding = _config->spacing.mediumSpacing;
+            padding = [_config getHostConfig]->spacing.mediumSpacing;
             break;
         case Spacing::Small:
-            padding = _config->spacing.smallSpacing;
+            padding = [_config getHostConfig]->spacing.smallSpacing;
             break;
         case Spacing::Default:
-            padding =  _config->spacing.defaultSpacing;
+            padding =  [_config getHostConfig]->spacing.defaultSpacing;
             break;
         default:
             break;
@@ -97,22 +100,20 @@
     [wrappingView addConstraints:vertConst];
     _adcView = wrappingView;
 
-    ContainerStyle style = (_config->adaptiveCard.allowCustomStyle)? _adaptiveCard->GetStyle() : _config->actions.showCard.style;
+    ContainerStyle containerStyle = ([_config getHostConfig]->adaptiveCard.allowCustomStyle)? _adaptiveCard->GetStyle() : [_config getHostConfig]->actions.showCard.style;
+
+    ACRContainerStyle style = (ACRContainerStyle)(containerStyle);
 
     long num = 0;
 
-    if(style == ContainerStyle::None)
-    {
-        style = [_superview getStyle];
+    if(style == ACRNone) {
+        style = [_superview style];
     }
 
-    if(style == ContainerStyle::Emphasis)
-    {
-        num = std::stoul(_config->containerStyles.emphasisPalette.backgroundColor.substr(1), nullptr, 16);
-    }
-    else
-    {
-        num = std::stoul(_config->containerStyles.defaultPalette.backgroundColor.substr(1), nullptr, 16);
+    if(style == ACREmphasis) {
+        num = std::stoul([_config getHostConfig]->containerStyles.emphasisPalette.backgroundColor.substr(1), nullptr, 16);
+    } else {
+        num = std::stoul([_config getHostConfig]->containerStyles.defaultPalette.backgroundColor.substr(1), nullptr, 16);
     }
 
     wrappingView.translatesAutoresizingMaskIntoConstraints = NO;

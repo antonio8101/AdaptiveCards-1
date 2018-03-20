@@ -9,9 +9,9 @@
 
 @implementation ACRBaseCardElementRenderer
 
-+ (CardElementType)elemType
++ (ACRCardElementType)elemType
 {
-    return CardElementType::Unsupported;
+    return ACRUnsupported;
 }
 
 /* not implemented ATM */
@@ -24,10 +24,10 @@
 }
 
 - (UIView *)render:(UIStackView *)viewGroup
-            rootViewController:(UIViewController *)vc
+            rootView:(ACRView *)rootView
             inputs:(NSMutableArray *)inputs
-      withCardElem:(std::shared_ptr<BaseCardElement> const &)elem
-     andHostConfig:(std::shared_ptr<HostConfig> const&)config
+   baseCardElement:(ACOBaseCardElement *)acoElem
+        hostConfig:(ACOHostConfig *)acoConfig;
 {
    return viewGroup;
 }

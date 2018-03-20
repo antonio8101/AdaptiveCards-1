@@ -4,13 +4,6 @@ import * as HostConfig from "./host-config";
 import * as TextFormatters from "./text-formatters";
 import { IAdaptiveCard } from "./schema";
 
-function invokeSetParent(obj: any, parent: CardElement) {
-    if (obj) {
-        // Closest emulation of "internal" in TypeScript.
-        obj["setParent"](parent);
-    }
-}
-
 function invokeSetCollection(action: Action, collection: ActionCollection) {
     if (action) {
         // Closest emulation of "internal" in TypeScript.
@@ -30,7 +23,7 @@ function isActionAllowed(action: Action, forbiddenActionTypes: Array<string>): b
     return true;
 }
 
-function createActionInstance(json: any): Action {
+export function createActionInstance(json: any): Action {
     var actionType = json["type"];
 
     var result = AdaptiveCard.actionTypeRegistry.createInstance(actionType);
@@ -97,6 +90,7 @@ export interface IValidationError {
 }
 
 export abstract class CardElement {
+    private _lang: string = undefined;
     private _hostConfig?: HostConfig.HostConfig = null;
     private _internalPadding: PaddingDefinition = null;
     private _parent: CardElement = null;
@@ -106,6 +100,7 @@ export abstract class CardElement {
     private _isVisible: boolean = true;
     private _truncatedDueToOverflow: boolean = false;
     private _defaultRenderedElementDisplayMode: string = null;
+    private _padding: PaddingDefinition = null;
 
     private internalRenderSeparator(): HTMLElement {
         return Utils.renderSeparation(
@@ -143,7 +138,40 @@ export abstract class CardElement {
         }
     }
 
-    protected _padding: PaddingDefinition = null;
+    // Marked private to emulate internal access
+    private handleOverflow(maxHeight: number) {
+        if (this.isVisible || this.isHiddenDueToOverflow()) {
+            var handled = this.truncateOverflow(maxHeight);
+
+            // Even if we were unable to truncate the element to fit this time,
+            // it still could have been previously truncated
+            this._truncatedDueToOverflow = handled || this._truncatedDueToOverflow;
+
+            if (!handled) {
+                this.hideElementDueToOverflow();
+            }
+            else if (handled && !this._isVisible) {
+                this.showElementHiddenDueToOverflow();
+            }
+        }
+    }
+
+    // Marked private to emulate internal access
+    private resetOverflow(): boolean {
+        var sizeChanged = false;
+
+        if (this._truncatedDueToOverflow) {
+            this.undoOverflowTruncation();
+            this._truncatedDueToOverflow = false;
+            sizeChanged = true;
+        }
+
+        if (this.isHiddenDueToOverflow) {
+            this.showElementHiddenDueToOverflow();
+        }
+
+        return sizeChanged;
+    }
 
     protected internalGetNonZeroPadding(padding: PaddingDefinition,
                                         processTop: boolean = true,
@@ -205,14 +233,6 @@ export abstract class CardElement {
         }
     }
 
-    protected setParent(value: CardElement) {
-        this._parent = value;
-    }
-
-    protected get useDefaultSizing(): boolean {
-        return true;
-    }
-
     protected abstract internalRender(): HTMLElement;
 
     /*
@@ -231,6 +251,10 @@ export abstract class CardElement {
      * This should reverse any changes performed in truncateOverflow().
      */
     protected undoOverflowTruncation() { }
+
+    protected get useDefaultSizing(): boolean {
+        return true;
+    }
 
     protected get allowCustomPadding(): boolean {
         return true;
@@ -257,6 +281,18 @@ export abstract class CardElement {
         return Enums.Orientation.Horizontal;
     }
 
+    protected getPadding(): PaddingDefinition {
+        return this._padding;
+    }
+
+    protected setPadding(value: PaddingDefinition) {
+        this._padding = value;
+
+        if (this._padding) {
+            AdaptiveCard.useAutomaticContainerBleeding = false;
+        }
+    }
+
     id: string;
     speak: string;
     horizontalAlignment?: Enums.HorizontalAlignment = null;
@@ -266,6 +302,10 @@ export abstract class CardElement {
 
     abstract getJsonTypeName(): string;
     abstract renderSpeech(): string;
+
+    setParent(value: CardElement) {
+        this._parent = value;
+    }
 
     getNonZeroPadding(): PaddingDefinition {
         var padding: PaddingDefinition = new PaddingDefinition();
@@ -347,41 +387,6 @@ export abstract class CardElement {
         // Does nothing in base implementation
     }
 
-    // Marked private to emulate internal access
-    private handleOverflow(maxHeight: number) {
-        if (this.isVisible || this.isHiddenDueToOverflow()) {
-            var handled = this.truncateOverflow(maxHeight);
-
-            // Even if we were unable to truncate the element to fit this time,
-            // it still could have been previously truncated
-            this._truncatedDueToOverflow = handled || this._truncatedDueToOverflow;
-
-            if (!handled) {
-                this.hideElementDueToOverflow();
-            }
-            else if (handled && !this._isVisible) {
-                this.showElementHiddenDueToOverflow();
-            }
-        }
-    }
-
-    // Marked private to emulate internal access
-    private resetOverflow(): boolean {
-        var sizeChanged = false;
-
-        if (this._truncatedDueToOverflow) {
-            this.undoOverflowTruncation();
-            this._truncatedDueToOverflow = false;
-            sizeChanged = true;
-        }
-
-        if (this.isHiddenDueToOverflow) {
-            this.showElementHiddenDueToOverflow();
-        }
-
-        return sizeChanged;
-    }
-
     isRendered(): boolean {
         return this._renderedElement && this._renderedElement.offsetHeight > 0;
     }
@@ -460,6 +465,34 @@ export abstract class CardElement {
 
     getActionById(id: string): Action {
         return null;
+    }
+
+    get lang(): string {
+        if (this._lang) {
+            return this._lang;
+        }
+        else {
+            if (this.parent) {
+                return this.parent.lang;
+            }
+            else {
+                return undefined;
+            }
+        }
+    }
+
+    set lang(value: string) {
+        if (value && value != "") {
+            var regEx = /^[a-z]{2,3}$/ig;
+
+            var matches = regEx.exec(value);
+
+            if (!matches) {
+                throw new Error("Invalid language identifier: " + value);
+            }
+        }
+
+        this._lang = value;
     }
 
     get hostConfig(): HostConfig.HostConfig {
@@ -634,7 +667,7 @@ export class TextBlock extends CardElement {
 
             element.style.fontWeight = fontWeight.toString();
 
-            var formattedText = TextFormatters.formatText(this.text);
+            var formattedText = TextFormatters.formatText(this.lang, this.text);
 
             element.innerHTML = this.useMarkdown ? AdaptiveCard.processMarkdown(formattedText) : formattedText;
 
@@ -660,7 +693,7 @@ export class TextBlock extends CardElement {
                 anchor.classList.add("ac-anchor");
                 anchor.target = "_blank";
                 anchor.onclick = (e) => {
-                    if (raiseAnchorClickedEvent(this, anchor)) {
+                    if (raiseAnchorClickedEvent(this, e.target as HTMLAnchorElement)) {
                         e.preventDefault();
                     }
                 }
@@ -1114,7 +1147,7 @@ export class Image extends CardElement {
         this._selectAction = value;
 
         if (this._selectAction) {
-            invokeSetParent(this._selectAction, this);
+            this._selectAction.setParent(this);
         }
     }
 }
@@ -1174,7 +1207,7 @@ export class ImageSet extends CardElement {
         if (!image.parent) {
             this._images.push(image);
 
-            invokeSetParent(image, this);
+            image.setParent(this);
         }
         else {
             throw new Error("This image already belongs to another ImageSet");
@@ -1797,11 +1830,11 @@ export abstract class Action {
     private _parent: CardElement = null;
     private _actionCollection: ActionCollection = null; // hold the reference to its action collection
 
-    protected setParent(value: CardElement) {
+    abstract getJsonTypeName(): string;
+
+    setParent(value: CardElement) {
         this._parent = value;
     }
-
-    abstract getJsonTypeName(): string;
 
     execute() {
         raiseExecuteActionEvent(this);
@@ -2033,12 +2066,6 @@ export class HttpAction extends Action {
 }
 
 export class ShowCardAction extends Action {
-    protected setParent(value: CardElement) {
-        super.setParent(value);
-
-        invokeSetParent(this.card, value);
-    }
-
     readonly card: AdaptiveCard = new InlineAdaptiveCard();
 
     getJsonTypeName(): string {
@@ -2053,6 +2080,12 @@ export class ShowCardAction extends Action {
         super.parse(json);
 
         this.card.parse(json["card"]);
+    }
+
+    setParent(value: CardElement) {
+        super.setParent(value);
+
+        this.card.setParent(value);
     }
 
     getAllInputs(): Array<Input> {
@@ -2080,7 +2113,8 @@ class ActionCollection {
     private _actionCard: HTMLElement = null;
 
     showStatusCard(status: AdaptiveCard) {
-        invokeSetParent(status, this._owner);
+        status.setParent(this._owner);
+
         this._statusCard = status.render();
 
         this.refreshContainer();
@@ -2397,7 +2431,8 @@ class ActionCollection {
         if (!action.parent) {
             this.items.push(action);
 
-            invokeSetParent(action, this._owner);
+            action.setParent(this._owner);
+
             invokeSetCollection(action, this);
         }
         else {
@@ -2885,15 +2920,11 @@ export class Container extends CardElement {
     }
 
     get padding(): PaddingDefinition {
-        return this._padding;
+        return this.getPadding();
     }
 
     set padding(value: PaddingDefinition) {
-        this._padding = value;
-
-        if (this.padding) {
-            AdaptiveCard.useAutomaticContainerBleeding = false;
-        }
+        this.setPadding(value);
     }
 
     getJsonTypeName(): string {
@@ -3015,7 +3046,7 @@ export class Container extends CardElement {
             if (item.isStandalone) {
                 this._items.push(item);
 
-                invokeSetParent(item, this);
+                item.setParent(this);
             }
             else {
                 throw new Error("Elements of type " + item.getJsonTypeName() + " cannot be used as standalone elements.");
@@ -3125,7 +3156,7 @@ export class Container extends CardElement {
         this._selectAction = value;
 
         if (this._selectAction) {
-            invokeSetParent(this._selectAction, this);
+            this._selectAction.setParent(this);
         }
     }
 }
@@ -3224,6 +3255,19 @@ export class ColumnSet extends CardElement {
     private _columns: Array<Column> = [];
     private _selectAction: Action;
 
+    protected applyPadding() {
+        if (this.padding) {
+            if (this.renderedElement) {
+                var physicalPadding = this.padding.toSpacingDefinition(this.hostConfig);
+
+                this.renderedElement.style.paddingTop = physicalPadding.top + "px";
+                this.renderedElement.style.paddingRight = physicalPadding.right + "px";
+                this.renderedElement.style.paddingBottom = physicalPadding.bottom + "px";
+                this.renderedElement.style.paddingLeft = physicalPadding.left + "px";
+            }
+        }
+    }
+
     protected internalRender(): HTMLElement {
         if (this._columns.length > 0) {
             var element = document.createElement("div");
@@ -3310,6 +3354,14 @@ export class ColumnSet extends CardElement {
         }
     }
 
+    get padding(): PaddingDefinition {
+        return this.getPadding();
+    }
+
+    set padding(value: PaddingDefinition) {
+        this.setPadding(value);
+    }
+
     getJsonTypeName(): string {
         return "ColumnSet";
     }
@@ -3364,6 +3416,8 @@ export class ColumnSet extends CardElement {
     }
 
     updateLayout(processChildren: boolean = true) {
+        this.applyPadding();
+        
         if (processChildren) {
             for (var i = 0; i < this._columns.length; i++) {
                 this._columns[i].updateLayout();
@@ -3375,7 +3429,7 @@ export class ColumnSet extends CardElement {
         if (!column.parent) {
             this._columns.push(column);
 
-            invokeSetParent(column, this);
+            column.setParent(this);
         }
         else {
             throw new Error("This column already belongs to another ColumnSet.");
@@ -3455,7 +3509,7 @@ export class ColumnSet extends CardElement {
         this._selectAction = value;
 
         if (this._selectAction) {
-            invokeSetParent(this._selectAction, this);
+            this._selectAction.setParent(this);
         }
     }
 }
@@ -3514,7 +3568,7 @@ function raiseAnchorClickedEvent(element: CardElement, anchor: HTMLAnchorElement
     let card = element.getRootElement() as AdaptiveCard;
     let onAnchorClickedHandler = (card && card.onAnchorClicked) ? card.onAnchorClicked : AdaptiveCard.onAnchorClicked;
 
-    return onAnchorClickedHandler != null ? onAnchorClickedHandler(anchor) : false;
+    return onAnchorClickedHandler != null ? onAnchorClickedHandler(card, anchor) : false;
 }
 
 function raiseExecuteActionEvent(action: Action) {
@@ -3757,7 +3811,7 @@ export class AdaptiveCard extends ContainerWithActions {
     static readonly elementTypeRegistry = new ElementTypeRegistry();
     static readonly actionTypeRegistry = new ActionTypeRegistry();
 
-    static onAnchorClicked: (anchor: HTMLAnchorElement) => boolean = null;
+    static onAnchorClicked: (rootCard: AdaptiveCard, anchor: HTMLAnchorElement) => boolean = null;
     static onExecuteAction: (action: Action) => void = null;
     static onElementVisibilityChanged: (element: CardElement) => void = null;
     static onInlineCardExpanded: (action: ShowCardAction, isExpanded: boolean) => void = null;
@@ -3853,7 +3907,7 @@ export class AdaptiveCard extends ContainerWithActions {
         return true;
     }
 
-    onAnchorClicked: (anchor: HTMLAnchorElement) => boolean = null;
+    onAnchorClicked: (rootCard: AdaptiveCard, anchor: HTMLAnchorElement) => boolean = null;
     onExecuteAction: (action: Action) => void = null;
     onElementVisibilityChanged: (element: CardElement) => void = null;
     onInlineCardExpanded: (action: ShowCardAction, isExpanded: boolean) => void = null;
@@ -3897,6 +3951,21 @@ export class AdaptiveCard extends ContainerWithActions {
 
     parse(json: any) {
         this._cardTypeName = json["type"];
+
+        var langId = json["lang"];
+
+        if (langId && typeof langId === "string") {
+            try {
+                this.lang = langId;
+            }
+            catch (e) {
+                raiseParseError(
+                    {
+                        error: Enums.ValidationError.InvalidPropertyValue,
+                        message: e.message
+                    });                        
+            }
+        }
 
         this.version = Version.parse(json["version"]);
 
